@@ -17,6 +17,7 @@ set(SOURCES
     src/telemetry_handler.cpp
     src/elrs_transmitter.cpp
     src/driver_installer.cpp
+    src/device_registry.cpp
 )
 
 # Check for libusb

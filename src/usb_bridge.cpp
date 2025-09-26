@@ -1,4 +1,5 @@
 #include "usb_bridge.h"
+#include "device_registry.h"
 #include <iostream>
 #include <sstream>
 #include <cstdlib>
@@ -350,14 +351,9 @@ namespace ELRS
         // Use Windows SetupAPI to scan for real USB devices
         std::cout << "[USB] Using Windows APIs to scan for USB devices..." << std::endl;
 
-        // Known ELRS VID/PID combinations
-        const std::vector<std::pair<uint16_t, uint16_t>> elrs_ids = {
-            {0x0483, 0x5740}, // STM32 VCP
-            {0x1209, 0x5741}, // ExpressLRS official
-            {0x10C4, 0xEA60}, // CP2102 USB to UART
-            {0x0403, 0x6001}, // FTDI FT232
-            {0x2E8A, 0x000A}, // Raspberry Pi Pico
-        };
+        // Get known ELRS devices from registry
+        Devices::DeviceRegistry& registry = Devices::DeviceRegistry::getInstance();
+        auto registeredDevices = registry.getAllDevices();
 
         HDEVINFO deviceInfoSet = SetupDiGetClassDevs(
             nullptr,                         // All device classes
@@ -401,38 +397,40 @@ namespace ELRS
                         uint16_t vid = std::stoi(hwId.substr(vidPos + 4, 4), nullptr, 16);
                         uint16_t pid = std::stoi(hwId.substr(pidPos + 4, 4), nullptr, 16);
 
-                        // Check if this is a known ELRS device
-                        for (const auto &elrs_id : elrs_ids)
+                        // Check if this is a known ELRS device using registry
+                        const auto* registeredDevice = registry.findDevice(vid, pid);
+                        if (registeredDevice != nullptr)
                         {
-                            if (vid == elrs_id.first && pid == elrs_id.second)
+                            DeviceInfo device;
+                            device.vid = vid;
+                            device.pid = pid;
+
+                            // Get device description from Windows
+                            TCHAR description[256];
+                            if (SetupDiGetDeviceRegistryProperty(
+                                    deviceInfoSet, &deviceInfoData, SPDRP_DEVICEDESC,
+                                    nullptr, (PBYTE)description, sizeof(description), &requiredSize))
                             {
-                                DeviceInfo device;
-                                device.vid = vid;
-                                device.pid = pid;
-
-                                // Get device description
-                                TCHAR description[256];
-                                if (SetupDiGetDeviceRegistryProperty(
-                                        deviceInfoSet, &deviceInfoData, SPDRP_DEVICEDESC,
-                                        nullptr, (PBYTE)description, sizeof(description), &requiredSize))
-                                {
-                                    device.product = std::string(description);
-                                }
-                                else
-                                {
-                                    device.product = "ExpressLRS Device";
-                                }
-
-                                device.manufacturer = "STMicroelectronics";
-                                device.serial = "REAL" + std::to_string(i);
-                                device.description = "Real hardware: " + device.product;
-
-                                devices.push_back(device);
-                                foundElrsDevice = true;
-
-                                std::cout << "[USB] ✓ Found ELRS device: " << device.product
-                                          << " (VID:" << std::hex << vid << " PID:" << pid << std::dec << ")" << std::endl;
+                                device.product = std::string(description);
                             }
+                            else
+                            {
+                                // Use registry info if Windows doesn't provide description
+                                device.product = registeredDevice->model;
+                            }
+
+                            // Use registry information
+                            device.manufacturer = Devices::DeviceRegistry::manufacturerToString(registeredDevice->manufacturer);
+                            device.serial = "REAL" + std::to_string(i);
+                            device.description = "Real hardware: " + device.product + 
+                                               " (" + Devices::DeviceRegistry::driverTypeToString(registeredDevice->driverType) + ")";
+
+                            devices.push_back(device);
+                            foundElrsDevice = true;
+
+                            std::cout << "[USB] ✓ Found ELRS device: " << device.product
+                                      << " (VID:" << std::hex << vid << " PID:" << pid << std::dec 
+                                      << ") - " << device.manufacturer << std::endl;
                         }
                     }
                     catch (const std::exception &e)
