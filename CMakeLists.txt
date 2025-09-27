@@ -4,6 +4,16 @@ project(elrs_otg_demo)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# FetchContent for external libraries
+include(FetchContent)
+
+# Fetch FTXUI library
+FetchContent_Declare(ftxui
+  GIT_REPOSITORY https://github.com/ArthurSonzogni/ftxui
+  GIT_TAG v5.0.0
+)
+FetchContent_MakeAvailable(ftxui)
+
 # Include directories
 include_directories(include)
 
@@ -18,6 +28,16 @@ set(SOURCES
     src/elrs_transmitter.cpp
     src/driver_installer.cpp
     src/device_registry.cpp
+    src/radio_state.cpp
+    src/log_manager.cpp
+    src/ftxui_manager.cpp
+    src/screen_base.cpp
+    src/screen_manager.cpp
+    src/tui_manager.cpp
+    src/screens/bind_screen.cpp
+    src/screens/update_screen.cpp
+    src/screens/export_screen.cpp
+    src/screens/settings_screen.cpp
 )
 
 # Check for libusb
@@ -96,17 +116,14 @@ if(LIBUSB_FOUND)
     endif()
 endif()
 
+# Link FTXUI libraries
+target_link_libraries(${PROJECT_NAME} 
+    ftxui::screen 
+    ftxui::dom 
+    ftxui::component
+)
+
 # Set output directory
 set_target_properties(${PROJECT_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/build
 )
-
-# Copy platform files to build directory
-if(WIN32)
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/platform
-        $<TARGET_FILE_DIR:${PROJECT_NAME}>/platform
-        COMMENT "Copying platform files to build directory"
-    )
-endif()

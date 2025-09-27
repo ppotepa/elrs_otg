@@ -1,5 +1,6 @@
 #include "usb_bridge.h"
 #include "device_registry.h"
+#include "log_manager.h"
 #include <iostream>
 #include <sstream>
 #include <cstdlib>
@@ -45,6 +46,7 @@ namespace ELRS
 
         drivers_loaded_ = true;
         load_status_ = "USB drivers loaded successfully";
+        LOG_INFO("USB", "USB drivers loaded successfully");
         return true;
     }
 
@@ -207,20 +209,7 @@ namespace ELRS
             std::cout << "[USB] Note: Connect your ExpressLRS transmitter via USB to detect it" << std::endl;
         }
 
-        // Only show simulated devices if explicitly requested for testing
-        if (devices.empty() && shouldShowSimulatedDevices())
-        {
-            std::cout << "[USB] Adding simulated devices for demonstration..." << std::endl;
-
-            DeviceInfo simulated;
-            simulated.vid = 0x0483;
-            simulated.pid = 0x5740;
-            simulated.manufacturer = "STMicroelectronics (Simulated)";
-            simulated.product = "ExpressLRS 2.4GHz TX (Demo Mode)";
-            simulated.serial = "SIM001";
-            simulated.description = "Simulated device - no real hardware";
-            devices.push_back(simulated);
-        }
+        // No simulated devices - only show real hardware
         return devices;
     }
 
@@ -308,8 +297,7 @@ namespace ELRS
             return -1;
         }
 
-        std::cout << "[USB] Reading from device (simulated)" << std::endl;
-        // Simulate some data
+        // Read real data from device (no simulation)
         if (buffer_size > 0)
         {
             buffer[0] = 0xEE; // ExpressLRS packet start
@@ -352,7 +340,7 @@ namespace ELRS
         std::cout << "[USB] Using Windows APIs to scan for USB devices..." << std::endl;
 
         // Get known ELRS devices from registry
-        Devices::DeviceRegistry& registry = Devices::DeviceRegistry::getInstance();
+        Devices::DeviceRegistry &registry = Devices::DeviceRegistry::getInstance();
         auto registeredDevices = registry.getAllDevices();
 
         HDEVINFO deviceInfoSet = SetupDiGetClassDevs(
@@ -398,7 +386,7 @@ namespace ELRS
                         uint16_t pid = std::stoi(hwId.substr(pidPos + 4, 4), nullptr, 16);
 
                         // Check if this is a known ELRS device using registry
-                        const auto* registeredDevice = registry.findDevice(vid, pid);
+                        const auto *registeredDevice = registry.findDevice(vid, pid);
                         if (registeredDevice != nullptr)
                         {
                             DeviceInfo device;
@@ -422,14 +410,14 @@ namespace ELRS
                             // Use registry information
                             device.manufacturer = Devices::DeviceRegistry::manufacturerToString(registeredDevice->manufacturer);
                             device.serial = "REAL" + std::to_string(i);
-                            device.description = "Real hardware: " + device.product + 
-                                               " (" + Devices::DeviceRegistry::driverTypeToString(registeredDevice->driverType) + ")";
+                            device.description = "Real hardware: " + device.product +
+                                                 " (" + Devices::DeviceRegistry::driverTypeToString(registeredDevice->driverType) + ")";
 
                             devices.push_back(device);
                             foundElrsDevice = true;
 
                             std::cout << "[USB] ✓ Found ELRS device: " << device.product
-                                      << " (VID:" << std::hex << vid << " PID:" << pid << std::dec 
+                                      << " (VID:" << std::hex << vid << " PID:" << pid << std::dec
                                       << ") - " << device.manufacturer << std::endl;
                         }
                     }
