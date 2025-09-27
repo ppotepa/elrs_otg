@@ -77,12 +77,16 @@ namespace ELRS
             LogManager::getInstance().info("FTXUI_MGR", "Starting FTXUI main loop");
             running_ = true;
 
-            // Create main component with keyboard handling
-            auto mainComponent = Container::Vertical({currentComponent_});
+            // Create main container and attach current screen
+            mainContainer_ = Container::Vertical({});
+            if (currentComponent_)
+            {
+                mainContainer_->Add(currentComponent_);
+            }
 
             // Add global key handler
-            mainComponent = CatchEvent(mainComponent, [this](Event event)
-                                       {
+            auto mainComponent = CatchEvent(mainContainer_, [this](Event event)
+                                            {
         // Handle F-key navigation
         if (event == Event::F1) {
             switchToScreen(ScreenType::Main);
@@ -210,6 +214,15 @@ namespace ELRS
             case ScreenType::Settings:
                 currentComponent_ = createSettingsScreen();
                 break;
+            }
+
+            if (mainContainer_)
+            {
+                mainContainer_->DetachAllChildren();
+                if (currentComponent_)
+                {
+                    mainContainer_->Add(currentComponent_);
+                }
             }
 
             LogManager::getInstance().info("FTXUI_MGR", "Switched to screen: " + screenTitles_[screenType]);

@@ -48,11 +48,11 @@ namespace ELRS
             void downloadFirmware();
             void flashFirmware();
             void updateProgress();
-            
+
             void renderVersionInfo(const RenderContext &renderContext);
             void renderUpdateProgress(const RenderContext &renderContext);
             void renderFirmwareList(const RenderContext &renderContext);
-            
+
             Color getStateColor() const;
             std::string getStateText() const;
             void simulateVersionCheck();
@@ -62,16 +62,16 @@ namespace ELRS
             UpdateState currentState_;
             std::chrono::steady_clock::time_point operationStartTime_;
             std::chrono::steady_clock::time_point lastUpdate_;
-            
+
             FirmwareInfo currentFirmware_;
             FirmwareInfo latestFirmware_;
             std::vector<FirmwareInfo> availableFirmware_;
-            
+
             int selectedFirmware_;
             int updateProgress_;
             bool isUpdating_;
             std::string statusMessage_;
-            
+
             static constexpr int UPDATE_INTERVAL_MS = 50;
         };
     }

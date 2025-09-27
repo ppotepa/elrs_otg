@@ -38,7 +38,7 @@ namespace ELRS
             void renderBindStatus(const RenderContext &renderContext);
             void renderBindControls(const RenderContext &renderContext);
             void renderBindProgress(const RenderContext &renderContext);
-            
+
             std::string generateBindPhrase();
             Color getStateColor(BindState state) const;
             std::string getStateText(BindState state) const;
@@ -50,7 +50,7 @@ namespace ELRS
             int bindProgress_;
             int bindTimeout_;
             bool isBinding_;
-            
+
             static constexpr int BIND_TIMEOUT_SECONDS = 30;
             static constexpr int BIND_UPDATE_INTERVAL_MS = 100;
         };

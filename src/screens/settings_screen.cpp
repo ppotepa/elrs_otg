@@ -144,24 +144,24 @@ namespace ELRS
                 markForRefresh();
                 return true;
             case FunctionKey::ArrowUp:
+            {
+                auto categorySettings = getCurrentCategorySettings();
+                if (selectedSetting_ > 0)
                 {
-                    auto categorySettings = getCurrentCategorySettings();
-                    if (selectedSetting_ > 0)
-                    {
-                        selectedSetting_--;
-                        markForRefresh();
-                    }
+                    selectedSetting_--;
+                    markForRefresh();
                 }
+            }
                 return true;
             case FunctionKey::ArrowDown:
+            {
+                auto categorySettings = getCurrentCategorySettings();
+                if (selectedSetting_ < static_cast<int>(categorySettings.size()) - 1)
                 {
-                    auto categorySettings = getCurrentCategorySettings();
-                    if (selectedSetting_ < static_cast<int>(categorySettings.size()) - 1)
-                    {
-                        selectedSetting_++;
-                        markForRefresh();
-                    }
+                    selectedSetting_++;
+                    markForRefresh();
                 }
+            }
                 return true;
             case FunctionKey::Enter:
                 editCurrentSetting();
@@ -198,45 +198,30 @@ namespace ELRS
         void SettingsScreen::initializeSettings()
         {
             // Application Settings
-            settings_.push_back({"Application", "Refresh Rate", "Screen refresh rate in milliseconds", 
-                               SettingType::Integer, "100", "100", {}, 50, 1000, false});
-            settings_.push_back({"Application", "Auto Save", "Automatically save configuration changes", 
-                               SettingType::Boolean, "true", "true", {"true", "false"}, 0, 0, false});
-            settings_.push_back({"Application", "Theme", "Application color theme", 
-                               SettingType::Selection, "Default", "Default", {"Default", "Dark", "Light", "High Contrast"}, 0, 0, false});
-            
+            settings_.push_back({"Application", "Refresh Rate", "Screen refresh rate in milliseconds", SettingType::Integer, "100", "100", {}, 50, 1000, false});
+            settings_.push_back({"Application", "Auto Save", "Automatically save configuration changes", SettingType::Boolean, "true", "true", {"true", "false"}, 0, 0, false});
+            settings_.push_back({"Application", "Theme", "Application color theme", SettingType::Selection, "Default", "Default", {"Default", "Dark", "Light", "High Contrast"}, 0, 0, false});
+
             // Display Settings
-            settings_.push_back({"Display", "Show Timestamps", "Display timestamps in status bars", 
-                               SettingType::Boolean, "true", "true", {"true", "false"}, 0, 0, false});
-            settings_.push_back({"Display", "Graph Points", "Maximum points to display in graphs", 
-                               SettingType::Integer, "100", "100", {}, 10, 1000, false});
-            settings_.push_back({"Display", "Animation Speed", "Animation speed multiplier", 
-                               SettingType::Float, "1.0", "1.0", {}, 0, 5, false});
-            
+            settings_.push_back({"Display", "Show Timestamps", "Display timestamps in status bars", SettingType::Boolean, "true", "true", {"true", "false"}, 0, 0, false});
+            settings_.push_back({"Display", "Graph Points", "Maximum points to display in graphs", SettingType::Integer, "100", "100", {}, 10, 1000, false});
+            settings_.push_back({"Display", "Animation Speed", "Animation speed multiplier", SettingType::Float, "1.0", "1.0", {}, 0, 5, false});
+
             // Connection Settings
-            settings_.push_back({"Connection", "Baud Rate", "Serial port baud rate", 
-                               SettingType::Selection, "420000", "420000", {"9600", "115200", "420000", "921600"}, 0, 0, false});
-            settings_.push_back({"Connection", "Auto Connect", "Automatically connect to devices", 
-                               SettingType::Boolean, "true", "true", {"true", "false"}, 0, 0, false});
-            settings_.push_back({"Connection", "Connection Timeout", "Connection timeout in seconds", 
-                               SettingType::Integer, "10", "10", {}, 1, 60, false});
-            
+            settings_.push_back({"Connection", "Baud Rate", "Serial port baud rate", SettingType::Selection, "420000", "420000", {"9600", "115200", "420000", "921600"}, 0, 0, false});
+            settings_.push_back({"Connection", "Auto Connect", "Automatically connect to devices", SettingType::Boolean, "true", "true", {"true", "false"}, 0, 0, false});
+            settings_.push_back({"Connection", "Connection Timeout", "Connection timeout in seconds", SettingType::Integer, "10", "10", {}, 1, 60, false});
+
             // Logging Settings
-            settings_.push_back({"Logging", "Log Level", "Minimum log level to display", 
-                               SettingType::Selection, "Info", "Info", {"Debug", "Info", "Warning", "Error"}, 0, 0, false});
-            settings_.push_back({"Logging", "Max Log Entries", "Maximum number of log entries to keep", 
-                               SettingType::Integer, "1000", "1000", {}, 100, 10000, false});
-            settings_.push_back({"Logging", "Log to File", "Save logs to file", 
-                               SettingType::Boolean, "false", "false", {"true", "false"}, 0, 0, false});
-            
+            settings_.push_back({"Logging", "Log Level", "Minimum log level to display", SettingType::Selection, "Info", "Info", {"Debug", "Info", "Warning", "Error"}, 0, 0, false});
+            settings_.push_back({"Logging", "Max Log Entries", "Maximum number of log entries to keep", SettingType::Integer, "1000", "1000", {}, 100, 10000, false});
+            settings_.push_back({"Logging", "Log to File", "Save logs to file", SettingType::Boolean, "false", "false", {"true", "false"}, 0, 0, false});
+
             // Telemetry Settings
-            settings_.push_back({"Telemetry", "Update Rate", "Telemetry update rate in Hz", 
-                               SettingType::Integer, "10", "10", {}, 1, 100, false});
-            settings_.push_back({"Telemetry", "Data Retention", "How long to keep telemetry data (hours)", 
-                               SettingType::Integer, "24", "24", {}, 1, 168, false});
-            settings_.push_back({"Telemetry", "Auto Export", "Auto-export telemetry data", 
-                               SettingType::Boolean, "false", "false", {"true", "false"}, 0, 0, false});
-            
+            settings_.push_back({"Telemetry", "Update Rate", "Telemetry update rate in Hz", SettingType::Integer, "10", "10", {}, 1, 100, false});
+            settings_.push_back({"Telemetry", "Data Retention", "How long to keep telemetry data (hours)", SettingType::Integer, "24", "24", {}, 1, 168, false});
+            settings_.push_back({"Telemetry", "Auto Export", "Auto-export telemetry data", SettingType::Boolean, "false", "false", {"true", "false"}, 0, 0, false});
+
             // Extract unique categories
             std::set<std::string> categorySet;
             for (const auto &setting : settings_)
@@ -250,7 +235,7 @@ namespace ELRS
         {
             // In a real implementation, this would load from a configuration file
             logInfo("Loading settings from configuration");
-            
+
             try
             {
                 std::ifstream configFile("elrs_otg_config.json");
@@ -266,14 +251,14 @@ namespace ELRS
                         {
                             std::string name = line.substr(0, colonPos);
                             std::string value = line.substr(colonPos + 1);
-                            
+
                             // Remove quotes and whitespace
                             name.erase(std::remove(name.begin(), name.end(), '\"'), name.end());
                             name.erase(std::remove(name.begin(), name.end(), ' '), name.end());
                             value.erase(std::remove(value.begin(), value.end(), '\"'), value.end());
                             value.erase(std::remove(value.begin(), value.end(), ' '), value.end());
                             value.erase(std::remove(value.begin(), value.end(), ','), value.end());
-                            
+
                             // Find and update setting
                             for (auto &setting : settings_)
                             {
@@ -303,7 +288,7 @@ namespace ELRS
         void SettingsScreen::saveSettings()
         {
             logInfo("Saving settings to configuration file");
-            
+
             try
             {
                 std::ofstream configFile("elrs_otg_config.json");
@@ -312,9 +297,9 @@ namespace ELRS
                     logError("Failed to open configuration file for writing");
                     return;
                 }
-                
+
                 configFile << "{\n";
-                
+
                 for (size_t i = 0; i < settings_.size(); i++)
                 {
                     const auto &setting = settings_[i];
@@ -323,17 +308,17 @@ namespace ELRS
                         configFile << ",";
                     configFile << "\n";
                 }
-                
+
                 configFile << "}\n";
                 configFile.close();
-                
+
                 // Reset modified flags
                 for (auto &setting : settings_)
                 {
                     setting.modified = false;
                 }
                 settingsModified_ = false;
-                
+
                 logInfo("Settings saved successfully");
                 markForRefresh();
             }
@@ -346,13 +331,13 @@ namespace ELRS
         void SettingsScreen::resetToDefaults()
         {
             logInfo("Resetting all settings to defaults");
-            
+
             for (auto &setting : settings_)
             {
                 setting.currentValue = setting.defaultValue;
                 setting.modified = false;
             }
-            
+
             settingsModified_ = true;
             markForRefresh();
         }
@@ -371,7 +356,7 @@ namespace ELRS
             for (size_t i = 0; i < categories_.size(); i++)
             {
                 moveCursor(startX, startY + 2 + static_cast<int>(i));
-                
+
                 if (static_cast<int>(i) == selectedCategory_)
                 {
                     setColor(Color::BrightBlue);
@@ -398,14 +383,14 @@ namespace ELRS
 
             // List settings for current category
             auto categorySettings = getCurrentCategorySettings();
-            
+
             for (size_t i = 0; i < categorySettings.size(); i++)
             {
                 const auto &setting = *categorySettings[i];
                 int y = startY + 2 + static_cast<int>(i);
-                
+
                 moveCursor(startX, y);
-                
+
                 if (static_cast<int>(i) == selectedSetting_)
                 {
                     setColor(Color::BrightBlue);
@@ -416,7 +401,7 @@ namespace ELRS
                     setColor(Color::White);
                     std::cout << "  ";
                 }
-                
+
                 // Setting name
                 setColor(getSettingColor(setting));
                 std::string displayName = setting.name;
@@ -425,7 +410,7 @@ namespace ELRS
                     displayName = displayName.substr(0, maxWidth - 23) + "...";
                 }
                 std::cout << std::left << std::setw(maxWidth - 15) << displayName;
-                
+
                 // Current value
                 setColor(setting.modified ? Color::BrightYellow : Color::BrightGreen);
                 std::string value = formatSettingValue(setting);
@@ -451,10 +436,10 @@ namespace ELRS
             moveCursor(centerX - 40, startY);
             setColor(Color::BrightCyan);
             std::cout << "╭──────────────────────────────────────────────────────────────────────────────╮";
-            
+
             moveCursor(centerX - 40, startY + 1);
             std::cout << "│                              Setting Details                                 │";
-            
+
             moveCursor(centerX - 40, startY + 2);
             std::cout << "├──────────────────────────────────────────────────────────────────────────────┤";
 
@@ -507,7 +492,7 @@ namespace ELRS
                 return;
 
             const auto &setting = *categorySettings[selectedSetting_];
-            
+
             if (setting.type == SettingType::Boolean)
             {
                 // Toggle boolean values
@@ -547,29 +532,29 @@ namespace ELRS
                 return;
 
             auto &setting = *categorySettings[selectedSetting_];
-            
+
             if (!validateSettingValue(setting, newValue))
             {
                 logWarning("Invalid setting value: " + newValue);
                 return;
             }
-            
+
             setting.currentValue = newValue;
             setting.modified = (newValue != setting.defaultValue);
             settingsModified_ = true;
-            
+
             logInfo("Changed setting '" + setting.name + "' to: " + newValue);
             markForRefresh();
         }
 
-        std::vector<SettingOption*> SettingsScreen::getCurrentCategorySettings()
+        std::vector<SettingOption *> SettingsScreen::getCurrentCategorySettings()
         {
-            std::vector<SettingOption*> result;
-            
+            std::vector<SettingOption *> result;
+
             if (selectedCategory_ >= 0 && selectedCategory_ < static_cast<int>(categories_.size()))
             {
                 const std::string &category = categories_[selectedCategory_];
-                
+
                 for (auto &setting : settings_)
                 {
                     if (setting.category == category)
@@ -578,7 +563,7 @@ namespace ELRS
                     }
                 }
             }
-            
+
             return result;
         }
 
@@ -601,7 +586,7 @@ namespace ELRS
             {
             case SettingType::Boolean:
                 return (value == "true" || value == "false");
-                
+
             case SettingType::Integer:
                 try
                 {
@@ -612,7 +597,7 @@ namespace ELRS
                 {
                     return false;
                 }
-                
+
             case SettingType::Float:
                 try
                 {
@@ -623,13 +608,13 @@ namespace ELRS
                 {
                     return false;
                 }
-                
+
             case SettingType::Selection:
                 return std::find(setting.options.begin(), setting.options.end(), value) != setting.options.end();
-                
+
             case SettingType::String:
                 return !value.empty(); // Basic validation - non-empty string
-                
+
             default:
                 return false;
             }

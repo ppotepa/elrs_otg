@@ -25,20 +25,14 @@ namespace ELRS
         {
             // Initialize export options
             exportOptions_ = {
-                {ExportType::TelemetryData, "Telemetry Data", "Export live telemetry data and statistics", 
-                 {ExportFormat::CSV, ExportFormat::JSON}, true},
-                {ExportType::LogFiles, "Log Files", "Export application and system logs", 
-                 {ExportFormat::TXT, ExportFormat::JSON}, true},
-                {ExportType::Configuration, "Configuration", "Export device and application settings", 
-                 {ExportFormat::JSON, ExportFormat::XML}, true},
-                {ExportType::Screenshots, "Screenshots", "Export screen captures and images", 
-                 {ExportFormat::TXT}, false}, // Disabled - not applicable for console app
-                {ExportType::All, "Complete Export", "Export all available data types", 
-                 {ExportFormat::JSON}, true}
-            };
-            
+                {ExportType::TelemetryData, "Telemetry Data", "Export live telemetry data and statistics", {ExportFormat::CSV, ExportFormat::JSON}, true},
+                {ExportType::LogFiles, "Log Files", "Export application and system logs", {ExportFormat::TXT, ExportFormat::JSON}, true},
+                {ExportType::Configuration, "Configuration", "Export device and application settings", {ExportFormat::JSON, ExportFormat::XML}, true},
+                {ExportType::Screenshots, "Screenshots", "Export screen captures and images", {ExportFormat::TXT}, false}, // Disabled - not applicable for console app
+                {ExportType::All, "Complete Export", "Export all available data types", {ExportFormat::JSON}, true}};
+
             exportPath_ = std::filesystem::current_path().string() + "/exports";
-            
+
             // Set default date range (last 24 hours)
             endDate_ = std::chrono::system_clock::now();
             startDate_ = endDate_ - std::chrono::hours(24);
@@ -51,7 +45,7 @@ namespace ELRS
             isExporting_ = false;
             exportProgress_ = 0;
             statusMessage_ = "Ready to export data";
-            
+
             // Create export directory if it doesn't exist
             try
             {
@@ -62,7 +56,7 @@ namespace ELRS
                 logError("Failed to create export directory: " + std::string(e.what()));
                 statusMessage_ = "Failed to create export directory";
             }
-            
+
             return true;
         }
 
@@ -199,7 +193,7 @@ namespace ELRS
                 }
                 return true;
             case FunctionKey::Enter:
-                if (!isExporting_ && selectedOption_ >= 0 && 
+                if (!isExporting_ && selectedOption_ >= 0 &&
                     selectedOption_ < static_cast<int>(exportOptions_.size()) &&
                     exportOptions_[selectedOption_].enabled)
                 {
@@ -256,13 +250,13 @@ namespace ELRS
                 return;
 
             logInfo("Starting export: " + option.name);
-            
+
             currentState_ = ExportState::Preparing;
             isExporting_ = true;
             exportStartTime_ = std::chrono::steady_clock::now();
             exportProgress_ = 0;
             processedFiles_ = 0;
-            
+
             // Calculate total files based on export type
             switch (option.type)
             {
@@ -282,7 +276,7 @@ namespace ELRS
                 totalFiles_ = 1;
                 break;
             }
-            
+
             statusMessage_ = "Preparing export...";
             markForRefresh();
         }
@@ -292,12 +286,12 @@ namespace ELRS
             auto now = std::chrono::steady_clock::now();
             auto elapsed = now - exportStartTime_;
             auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed);
-            
+
             if (currentState_ == ExportState::Preparing)
             {
                 // Preparation phase (1 second)
                 exportProgress_ = ms.count() / 50 > 20 ? 20 : static_cast<int>(ms.count() / 50);
-                
+
                 if (exportProgress_ >= 20)
                 {
                     currentState_ = ExportState::Exporting;
@@ -309,12 +303,12 @@ namespace ELRS
             {
                 // Export phase (based on processed files)
                 exportProgress_ = 20 + ((processedFiles_ * 70) / totalFiles_);
-                
+
                 // Simulate file processing
                 if (ms.count() > 2000 + (processedFiles_ * 1000)) // 1 second per file + 2 second prep
                 {
                     processedFiles_++;
-                    
+
                     if (processedFiles_ >= totalFiles_)
                     {
                         currentState_ = ExportState::Complete;
@@ -335,21 +329,21 @@ namespace ELRS
         {
             const auto &option = exportOptions_[selectedOption_];
             const auto format = option.supportedFormats[selectedFormat_];
-            
+
             // Generate timestamp for filename
             auto now = std::chrono::system_clock::now();
             auto time_t = std::chrono::system_clock::to_time_t(now);
             auto tm = *std::localtime(&time_t);
-            
+
             std::stringstream timestamp;
             timestamp << std::put_time(&tm, "%Y%m%d_%H%M%S");
-            
+
             std::string baseFilename = exportPath_ + "/elrs_export_" + timestamp.str();
-            
+
             try
             {
                 bool success = false;
-                
+
                 switch (option.type)
                 {
                 case ExportType::TelemetryData:
@@ -363,14 +357,14 @@ namespace ELRS
                     break;
                 case ExportType::All:
                     success = exportTelemetryData(baseFilename + "_telemetry", format) &&
-                             exportLogFiles(baseFilename + "_logs", format) &&
-                             exportConfiguration(baseFilename + "_config", format);
+                              exportLogFiles(baseFilename + "_logs", format) &&
+                              exportConfiguration(baseFilename + "_config", format);
                     break;
                 default:
                     success = false;
                     break;
                 }
-                
+
                 if (!success)
                 {
                     currentState_ = ExportState::Failed;
@@ -400,9 +394,9 @@ namespace ELRS
             {
                 const auto &option = exportOptions_[i];
                 int y = startY + 2 + static_cast<int>(i);
-                
+
                 moveCursor(centerX - 40, y);
-                
+
                 if (static_cast<int>(i) == selectedOption_)
                 {
                     setColor(Color::BrightBlue);
@@ -413,7 +407,7 @@ namespace ELRS
                     setColor(Color::White);
                     std::cout << "  ";
                 }
-                
+
                 // Option name
                 if (option.enabled)
                 {
@@ -423,13 +417,13 @@ namespace ELRS
                 {
                     setColor(Color::DarkGray);
                 }
-                
+
                 std::cout << std::left << std::setw(20) << option.name;
-                
+
                 // Description
                 setColor(Color::White);
                 std::cout << " - " << option.description;
-                
+
                 // Show selected format
                 if (static_cast<int>(i) == selectedOption_ && !option.supportedFormats.empty())
                 {
@@ -448,10 +442,10 @@ namespace ELRS
             moveCursor(centerX - 35, startY);
             setColor(Color::BrightCyan);
             std::cout << "╭──────────────────────────────────────────────────────────────────────╮";
-            
+
             moveCursor(centerX - 35, startY + 1);
             std::cout << "│                          Export Settings                             │";
-            
+
             moveCursor(centerX - 35, startY + 2);
             std::cout << "├──────────────────────────────────────────────────────────────────────┤";
 
@@ -478,7 +472,7 @@ namespace ELRS
                 auto end_time_t = std::chrono::system_clock::to_time_t(endDate_);
                 auto start_tm = *std::localtime(&start_time_t);
                 auto end_tm = *std::localtime(&end_time_t);
-                
+
                 std::stringstream range;
                 range << std::put_time(&start_tm, "%Y-%m-%d") << " to " << std::put_time(&end_tm, "%Y-%m-%d");
                 std::cout << std::left << std::setw(55) << range.str();
@@ -524,10 +518,10 @@ namespace ELRS
             printCentered(startY, getStateText(currentState_), getStateColor(currentState_));
 
             // Progress bar
-            moveCursor(centerX - progressWidth/2, startY + 2);
+            moveCursor(centerX - progressWidth / 2, startY + 2);
             setColor(Color::BrightCyan);
             std::cout << "[";
-            
+
             int filled = (exportProgress_ * (progressWidth - 2)) / 100;
             for (int i = 0; i < progressWidth - 2; i++)
             {
@@ -542,7 +536,7 @@ namespace ELRS
                     std::cout << "░";
                 }
             }
-            
+
             setColor(Color::BrightCyan);
             std::cout << "] " << exportProgress_ << "%";
 
@@ -561,7 +555,7 @@ namespace ELRS
         bool ExportScreen::exportTelemetryData(const std::string &filename, ExportFormat format)
         {
             std::string fullPath = filename + getFormatExtension(format);
-            
+
             try
             {
                 std::ofstream file(fullPath);
@@ -574,11 +568,11 @@ namespace ELRS
                 if (format == ExportFormat::CSV)
                 {
                     file << "Timestamp,LinkQuality,SignalStrength,PacketsRX,PacketsTX\n";
-                    
+
                     auto now = std::chrono::system_clock::now();
                     auto time_t = std::chrono::system_clock::to_time_t(now);
                     auto tm = *std::localtime(&time_t);
-                    
+
                     file << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << ","
                          << telemetry.linkQuality << ","
                          << telemetry.rssi1 << ","
@@ -596,7 +590,7 @@ namespace ELRS
                     file << "  }\n";
                     file << "}\n";
                 }
-                
+
                 file.close();
                 logInfo("Exported telemetry data to: " + fullPath);
                 return true;
@@ -611,7 +605,7 @@ namespace ELRS
         bool ExportScreen::exportLogFiles(const std::string &filename, ExportFormat format)
         {
             std::string fullPath = filename + getFormatExtension(format);
-            
+
             try
             {
                 std::ofstream file(fullPath);
@@ -633,7 +627,7 @@ namespace ELRS
                 {
                     file << "{\n";
                     file << "  \"logs\": [\n";
-                    
+
                     for (size_t i = 0; i < logs.size(); i++)
                     {
                         const auto &log = logs[i];
@@ -643,14 +637,15 @@ namespace ELRS
                         file << "      \"category\": \"" << log.category << "\",\n";
                         file << "      \"message\": \"" << log.message << "\"\n";
                         file << "    }";
-                        if (i < logs.size() - 1) file << ",";
+                        if (i < logs.size() - 1)
+                            file << ",";
                         file << "\n";
                     }
-                    
+
                     file << "  ]\n";
                     file << "}\n";
                 }
-                
+
                 file.close();
                 logInfo("Exported log files to: " + fullPath);
                 return true;
@@ -665,7 +660,7 @@ namespace ELRS
         bool ExportScreen::exportConfiguration(const std::string &filename, ExportFormat format)
         {
             std::string fullPath = filename + getFormatExtension(format);
-            
+
             try
             {
                 std::ofstream file(fullPath);
@@ -706,7 +701,7 @@ namespace ELRS
                     file << "  </device>\n";
                     file << "</configuration>\n";
                 }
-                
+
                 file.close();
                 logInfo("Exported configuration to: " + fullPath);
                 return true;
@@ -727,11 +722,16 @@ namespace ELRS
         {
             switch (format)
             {
-            case ExportFormat::CSV: return ".csv";
-            case ExportFormat::JSON: return ".json";
-            case ExportFormat::TXT: return ".txt";
-            case ExportFormat::XML: return ".xml";
-            default: return ".txt";
+            case ExportFormat::CSV:
+                return ".csv";
+            case ExportFormat::JSON:
+                return ".json";
+            case ExportFormat::TXT:
+                return ".txt";
+            case ExportFormat::XML:
+                return ".xml";
+            default:
+                return ".txt";
             }
         }
 
@@ -739,11 +739,16 @@ namespace ELRS
         {
             switch (format)
             {
-            case ExportFormat::CSV: return "CSV (Comma Separated Values)";
-            case ExportFormat::JSON: return "JSON (JavaScript Object Notation)";
-            case ExportFormat::TXT: return "TXT (Plain Text)";
-            case ExportFormat::XML: return "XML (Extensible Markup Language)";
-            default: return "Unknown";
+            case ExportFormat::CSV:
+                return "CSV (Comma Separated Values)";
+            case ExportFormat::JSON:
+                return "JSON (JavaScript Object Notation)";
+            case ExportFormat::TXT:
+                return "TXT (Plain Text)";
+            case ExportFormat::XML:
+                return "XML (Extensible Markup Language)";
+            default:
+                return "Unknown";
             }
         }
 
@@ -751,12 +756,18 @@ namespace ELRS
         {
             switch (state)
             {
-            case ExportState::Idle: return Color::BrightBlue;
-            case ExportState::Preparing: return Color::BrightYellow;
-            case ExportState::Exporting: return Color::BrightCyan;
-            case ExportState::Complete: return Color::BrightGreen;
-            case ExportState::Failed: return Color::BrightRed;
-            default: return Color::White;
+            case ExportState::Idle:
+                return Color::BrightBlue;
+            case ExportState::Preparing:
+                return Color::BrightYellow;
+            case ExportState::Exporting:
+                return Color::BrightCyan;
+            case ExportState::Complete:
+                return Color::BrightGreen;
+            case ExportState::Failed:
+                return Color::BrightRed;
+            default:
+                return Color::White;
             }
         }
 
@@ -764,12 +775,18 @@ namespace ELRS
         {
             switch (state)
             {
-            case ExportState::Idle: return "Ready to Export";
-            case ExportState::Preparing: return "Preparing Export";
-            case ExportState::Exporting: return "Exporting Data";
-            case ExportState::Complete: return "Export Complete";
-            case ExportState::Failed: return "Export Failed";
-            default: return "Unknown";
+            case ExportState::Idle:
+                return "Ready to Export";
+            case ExportState::Preparing:
+                return "Preparing Export";
+            case ExportState::Exporting:
+                return "Exporting Data";
+            case ExportState::Complete:
+                return "Export Complete";
+            case ExportState::Failed:
+                return "Export Failed";
+            default:
+                return "Unknown";
             }
         }
     }

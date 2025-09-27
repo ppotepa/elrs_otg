@@ -63,15 +63,15 @@ namespace ELRS
             void startExport();
             void updateExportProgress();
             void performExport();
-            
+
             void renderExportOptions(const RenderContext &renderContext);
             void renderExportSettings(const RenderContext &renderContext);
             void renderExportProgress(const RenderContext &renderContext);
-            
+
             bool exportTelemetryData(const std::string &filename, ExportFormat format);
             bool exportLogFiles(const std::string &filename, ExportFormat format);
             bool exportConfiguration(const std::string &filename, ExportFormat format);
-            
+
             std::string getExportPath() const;
             std::string getFormatExtension(ExportFormat format) const;
             std::string getFormatName(ExportFormat format) const;
@@ -80,25 +80,25 @@ namespace ELRS
 
             std::vector<ExportOption> exportOptions_;
             ExportState currentState_;
-            
+
             int selectedOption_;
             int selectedFormat_;
             std::string exportPath_;
             std::string statusMessage_;
-            
+
             std::chrono::steady_clock::time_point exportStartTime_;
             std::chrono::steady_clock::time_point lastUpdate_;
-            
+
             int exportProgress_;
             bool isExporting_;
             int totalFiles_;
             int processedFiles_;
-            
+
             // Date range selection
             std::chrono::system_clock::time_point startDate_;
             std::chrono::system_clock::time_point endDate_;
             bool useDateRange_;
-            
+
             static constexpr int EXPORT_UPDATE_INTERVAL_MS = 100;
         };
     }

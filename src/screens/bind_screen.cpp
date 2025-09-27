@@ -11,10 +11,10 @@ namespace ELRS
     namespace UI
     {
         BindScreen::BindScreen()
-            : ScreenBase(ScreenType::Bind, "Bind"), 
-              currentState_(BindState::Idle), 
-              bindProgress_(0), 
-              bindTimeout_(BIND_TIMEOUT_SECONDS), 
+            : ScreenBase(ScreenType::Bind, "Bind"),
+              currentState_(BindState::Idle),
+              bindProgress_(0),
+              bindTimeout_(BIND_TIMEOUT_SECONDS),
               isBinding_(false),
               lastUpdate_(std::chrono::steady_clock::now())
         {
@@ -183,10 +183,10 @@ namespace ELRS
 
             auto now = std::chrono::steady_clock::now();
             auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - bindStartTime_);
-            
+
             // Update progress
             bindProgress_ = static_cast<int>((elapsed.count() * 100) / BIND_TIMEOUT_SECONDS);
-            
+
             // Check for timeout
             if (elapsed.count() >= BIND_TIMEOUT_SECONDS)
             {
@@ -194,7 +194,7 @@ namespace ELRS
                 std::random_device rd;
                 std::mt19937 gen(rd());
                 std::uniform_int_distribution<> dis(1, 10);
-                
+
                 if (dis(gen) <= 7) // 70% success rate
                 {
                     currentState_ = BindState::Bound;
@@ -205,7 +205,7 @@ namespace ELRS
                     currentState_ = BindState::Failed;
                     logWarning("Binding failed - timeout or device not found");
                 }
-                
+
                 isBinding_ = false;
                 bindProgress_ = 100;
             }
@@ -215,7 +215,7 @@ namespace ELRS
                 std::random_device rd;
                 std::mt19937 gen(rd());
                 std::uniform_int_distribution<> dis(1, 1000);
-                
+
                 if (dis(gen) <= 5) // 0.5% chance per update
                 {
                     currentState_ = BindState::Bound;
@@ -235,10 +235,10 @@ namespace ELRS
             moveCursor(centerX - 35, startY);
             setColor(Color::BrightCyan);
             std::cout << "╭─────────────────────────────────────────────────────────────────────╮";
-            
+
             moveCursor(centerX - 35, startY + 1);
             std::cout << "│                        ExpressLRS Binding Status                    │";
-            
+
             moveCursor(centerX - 35, startY + 2);
             std::cout << "├─────────────────────────────────────────────────────────────────────┤";
 
@@ -261,7 +261,7 @@ namespace ELRS
             // Device info
             auto &radioState = getRadioState();
             auto deviceConfig = radioState.getDeviceConfiguration();
-            
+
             moveCursor(centerX - 35, startY + 5);
             std::cout << "│ Target Device: ";
             setColor(Color::BrightWhite);
@@ -281,13 +281,13 @@ namespace ELRS
             // Instructions
             setColor(Color::BrightWhite);
             printCentered(startY, "Instructions:", Color::BrightWhite);
-            
+
             setColor(Color::White);
             printCentered(startY + 2, "1. Ensure your ExpressLRS receiver is powered and in range");
             printCentered(startY + 3, "2. Press ENTER to start the binding process");
             printCentered(startY + 4, "3. Put your receiver into bind mode within 30 seconds");
             printCentered(startY + 5, "4. Wait for binding confirmation");
-            
+
             if (currentState_ == BindState::Bound)
             {
                 printCentered(startY + 7, "✓ Binding Complete! Your receiver is now paired.", Color::BrightGreen);
@@ -309,13 +309,13 @@ namespace ELRS
             int progressWidth = 50;
 
             // Progress bar
-            moveCursor(centerX - progressWidth/2, startY);
+            moveCursor(centerX - progressWidth / 2, startY);
             setColor(Color::BrightYellow);
             std::cout << "Binding Progress: ";
 
-            moveCursor(centerX - progressWidth/2, startY + 1);
+            moveCursor(centerX - progressWidth / 2, startY + 1);
             std::cout << "[";
-            
+
             int filled = (bindProgress_ * (progressWidth - 2)) / 100;
             for (int i = 0; i < progressWidth - 2; i++)
             {
@@ -330,7 +330,7 @@ namespace ELRS
                     std::cout << "░";
                 }
             }
-            
+
             setColor(Color::BrightYellow);
             std::cout << "] " << bindProgress_ << "%";
 
@@ -340,7 +340,7 @@ namespace ELRS
                 auto now = std::chrono::steady_clock::now();
                 auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - bindStartTime_);
                 int remaining = BIND_TIMEOUT_SECONDS - static_cast<int>(elapsed.count());
-                
+
                 moveCursor(centerX - 10, startY + 3);
                 setColor(Color::BrightCyan);
                 std::cout << "Time remaining: " << remaining << " seconds";
@@ -353,13 +353,12 @@ namespace ELRS
             const std::vector<std::string> words = {
                 "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel",
                 "india", "juliet", "kilo", "lima", "mike", "november", "oscar", "papa",
-                "quebec", "romeo", "sierra", "tango", "uniform", "victor", "whiskey", "xray"
-            };
-            
+                "quebec", "romeo", "sierra", "tango", "uniform", "victor", "whiskey", "xray"};
+
             std::random_device rd;
             std::mt19937 gen(rd());
             std::uniform_int_distribution<> dis(0, words.size() - 1);
-            
+
             return words[dis(gen)] + "-" + words[dis(gen)] + "-" + words[dis(gen)];
         }
 

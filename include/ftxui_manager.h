@@ -76,6 +76,7 @@ namespace ELRS
         private:
             // Member variables
             ScreenInteractive screen_;
+            Component mainContainer_;
             Component currentComponent_;
             ScreenType currentScreen_;
 
