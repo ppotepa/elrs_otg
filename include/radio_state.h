@@ -161,6 +161,13 @@ namespace ELRS
         std::vector<int> getLinkQualityHistory(int maxPoints = 100) const;
         std::vector<int> getTxPowerHistory(int maxPoints = 100) const;
 
+        // Spectrum analysis data
+        void updateSpectrumData(const std::vector<int> &data);
+        std::vector<int> getSpectrumData() const;
+        bool isSpectrumFresh(int maxAgeMs = 1000) const;
+        size_t getSpectrumBinCount() const;
+        std::chrono::steady_clock::time_point getSpectrumLastUpdate() const;
+
         // System state
         void markSystemReady();
         bool isSystemReady() const;
@@ -187,6 +194,9 @@ namespace ELRS
         std::vector<int> link_quality_history_;
         std::vector<int> tx_power_history_;
         static constexpr size_t MAX_HISTORY_SIZE = 200;
+        std::vector<int> spectrum_data_;
+        std::chrono::steady_clock::time_point spectrum_last_update_;
+        static constexpr size_t MAX_SPECTRUM_SIZE = 256;
 
         // Timing
         std::chrono::steady_clock::time_point start_time_;

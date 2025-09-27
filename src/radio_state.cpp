@@ -21,6 +21,7 @@ namespace ELRS
         rssi_history_.reserve(MAX_HISTORY_SIZE);
         link_quality_history_.reserve(MAX_HISTORY_SIZE);
         tx_power_history_.reserve(MAX_HISTORY_SIZE);
+        spectrum_last_update_ = start_time_;
     }
 
     // Connection management
@@ -353,6 +354,54 @@ namespace ELRS
 
         auto start = tx_power_history_.end() - maxPoints;
         return std::vector<int>(start, tx_power_history_.end());
+    }
+
+    void RadioState::updateSpectrumData(const std::vector<int> &data)
+    {
+        if (data.empty())
+        {
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        spectrum_data_ = data;
+        if (spectrum_data_.size() > MAX_SPECTRUM_SIZE)
+        {
+            spectrum_data_.erase(spectrum_data_.begin(), spectrum_data_.end() - MAX_SPECTRUM_SIZE);
+        }
+        spectrum_last_update_ = std::chrono::steady_clock::now();
+        notifyStateChange();
+    }
+
+    std::vector<int> RadioState::getSpectrumData() const
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        return spectrum_data_;
+    }
+
+    bool RadioState::isSpectrumFresh(int maxAgeMs) const
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        if (spectrum_data_.empty())
+        {
+            return false;
+        }
+
+        auto now = std::chrono::steady_clock::now();
+        auto age = std::chrono::duration_cast<std::chrono::milliseconds>(now - spectrum_last_update_);
+        return age.count() <= maxAgeMs;
+    }
+
+    size_t RadioState::getSpectrumBinCount() const
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        return spectrum_data_.size();
+    }
+
+    std::chrono::steady_clock::time_point RadioState::getSpectrumLastUpdate() const
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        return spectrum_last_update_;
     }
 
     // System state

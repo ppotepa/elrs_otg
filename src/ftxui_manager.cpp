@@ -40,6 +40,9 @@ namespace ELRS
               mspCommands_(nullptr),
               refreshThreadRunning_(false),
               autoLinkStatsRunning_(false),
+              spectrumRequestRunning_(false),
+              spectrumRequestsEnabled_(true),
+              spectrumRequestInterval_(std::chrono::milliseconds(DEFAULT_SPECTRUM_INTERVAL_MS)),
               txTestRunning_(false),
               txTestStopRequested_(false),
               configSelectedIndex_(0),
@@ -49,6 +52,9 @@ namespace ELRS
               txTestSelectedIndex_(0),
               txTestStatusMessage_("Ready to run tests."),
               transmitterWasRunningBeforeTest_(false),
+              txTestDurationOverride_(std::nullopt),
+              autoPowerTestScheduled_(false),
+              autoPowerTestDuration_(std::chrono::milliseconds(0)),
               rxTestInProgress_(false),
               rxTestStatusMessage_("Diagnostics idle."),
               bindingActive_(false),
@@ -131,6 +137,13 @@ namespace ELRS
             mspCommands_ = transmitter_ ? transmitter_->getMspCommands() : nullptr;
         }
 
+        void FTXUIManager::scheduleAutomaticPowerTest(std::chrono::milliseconds duration)
+        {
+            autoPowerTestDuration_ = duration;
+            autoPowerTestScheduled_.store(true);
+            LOG_INFO("FTXUI_MGR", "Scheduled automatic power test for duration " + std::to_string(duration.count()) + "ms");
+        }
+
         void FTXUIManager::enableAutoLinkStats(bool enable)
         {
             autoLinkStatsEnabled_ = enable;
@@ -189,6 +202,13 @@ namespace ELRS
             LOG_INFO("FTXUI_MGR", "Starting FTXUI main loop");
             running_ = true;
 
+            if (autoPowerTestScheduled_.exchange(false))
+            {
+                LOG_INFO("FTXUI_MGR", "Triggering scheduled automatic power test");
+                txTestDurationOverride_ = autoPowerTestDuration_;
+                startTxTest("Continuous Wave");
+            }
+
             mainContainer_ = Container::Vertical({});
             if (currentComponent_)
             {
@@ -215,6 +235,7 @@ namespace ELRS
             running_ = false;
 
             stopTxTest(false);
+            stopSpectrumRequestThread();
             stopAutoLinkStatsThread();
             stopRefreshThread();
 
@@ -406,41 +427,147 @@ namespace ELRS
                             {
                                 auto &radioState = RadioState::getInstance();
 
+                                bool liveSpectrum = false;
+                                auto spectrumSamples = generateSpectrumSamples(&liveSpectrum);
                                 auto rssiHistory = radioState.getRSSIHistory(120);
                                 auto linkHistory = radioState.getLinkQualityHistory(120);
                                 auto powerHistory = radioState.getTxPowerHistory(120);
+                                auto telemetry = radioState.getLiveTelemetry();
 
-                                auto buildGraphCard = [this](const std::string &title, const std::vector<int> &values, const std::string &unit)
+                                constexpr double bandStartMHz = 2400.0;
+                                constexpr double bandEndMHz = 2483.5;
+                                int sampleCount = static_cast<int>(spectrumSamples.size());
+                                int peakIndex = 0;
+                                int peakValue = 0;
+                                if (!spectrumSamples.empty())
                                 {
-                                    int minValue = values.empty() ? 0 : *std::min_element(values.begin(), values.end());
-                                    int maxValue = values.empty() ? 0 : *std::max_element(values.begin(), values.end());
-                                    double avgValue = values.empty() ? 0.0 : std::accumulate(values.begin(), values.end(), 0.0) / values.size();
+                                    auto it = std::max_element(spectrumSamples.begin(), spectrumSamples.end());
+                                    peakIndex = static_cast<int>(std::distance(spectrumSamples.begin(), it));
+                                    peakValue = *it;
+                                }
+                                double freqStep = (sampleCount > 1) ? (bandEndMHz - bandStartMHz) / static_cast<double>(sampleCount - 1) : 0.0;
+                                double peakFrequency = bandStartMHz + freqStep * peakIndex;
 
-                                    std::stringstream info;
-                                    info << "Min: " << minValue << unit << "  Max: " << maxValue << unit << "  Avg: " << std::fixed << std::setprecision(1) << avgValue << unit;
+                                auto binsReported = radioState.getSpectrumBinCount();
+                                auto now = std::chrono::steady_clock::now();
+                                auto lastUpdate = radioState.getSpectrumLastUpdate();
+                                auto ageMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdate).count();
+                                if (ageMs < 0)
+                                {
+                                    ageMs = 0;
+                                }
 
-                                    return vbox({
-                                               text(title) | center | bold,
-                                               createSparkline(values) | flex,
-                                               text(info.str()) | dim | center,
-                                           }) |
-                                           border | flex;
+                                auto formatAge = [](long long ms)
+                                {
+                                    if (ms < 1000)
+                                    {
+                                        return std::to_string(ms) + " ms";
+                                    }
+                                    double seconds = static_cast<double>(ms) / 1000.0;
+                                    std::ostringstream ss;
+                                    ss << std::fixed << std::setprecision(seconds >= 10.0 ? 1 : 2) << seconds << " s";
+                                    return ss.str();
                                 };
 
-                                auto graphsRow = hbox({
-                                    buildGraphCard("RSSI", rssiHistory, " dBm"),
-                                    separator(),
-                                    buildGraphCard("Link Quality", linkHistory, "%"),
-                                    separator(),
-                                    buildGraphCard("TX Power", powerHistory, " dBm"),
-                                }) | flex;
+                                std::string spectrumStatusText;
+                                std::string spectrumMetaText;
+                                ftxui::Color spectrumStatusColor = ftxui::Color::Yellow;
+
+                                if (liveSpectrum && !spectrumSamples.empty())
+                                {
+                                    spectrumStatusText = "Live spectrum telemetry";
+                                    spectrumMetaText = "Telemetry bins: " + std::to_string(binsReported) + " | updated " + formatAge(ageMs) + " ago";
+                                    spectrumStatusColor = ftxui::Color::Green;
+                                }
+                                else if (binsReported > 0)
+                                {
+                                    spectrumStatusText = "Spectrum telemetry stale";
+                                    spectrumMetaText = "Last telemetry update " + formatAge(ageMs) + " ago • displaying simulated profile";
+                                    spectrumStatusColor = ftxui::Color::YellowLight;
+                                }
+                                else
+                                {
+                                    spectrumStatusText = "Spectrum telemetry unavailable";
+                                    spectrumMetaText = "Rendering synthetic spectrum derived from link statistics";
+                                    spectrumStatusColor = ftxui::Color::RedLight;
+                                }
+
+                                std::stringstream spectrumInfo;
+                                if (!spectrumSamples.empty())
+                                {
+                                    spectrumInfo << "Peak energy near " << std::fixed << std::setprecision(1) << peakFrequency << " MHz (" << peakValue << " au)";
+                                }
+                                else
+                                {
+                                    spectrumInfo << "Spectrum data unavailable";
+                                }
+
+                                std::vector<double> tickFrequencies = {2400.0, 2415.0, 2430.0, 2445.0, 2460.0, 2475.0, 2483.5};
+                                Elements tickLabels;
+                                for (size_t i = 0; i < tickFrequencies.size(); ++i)
+                                {
+                                    std::stringstream tickText;
+                                    tickText << std::fixed << std::setprecision(i == tickFrequencies.size() - 1 ? 1 : 0) << tickFrequencies[i] << " MHz";
+                                    tickLabels.push_back(text(tickText.str()) | dim);
+                                    if (i + 1 < tickFrequencies.size())
+                                    {
+                                        tickLabels.push_back(filler());
+                                    }
+                                }
+
+                                auto spectrumPanel = vbox({
+                                                         text("2.4 GHz Spectrum Overview") | center | bold | color(ftxui::Color::Cyan),
+                                                          separator(),
+                                                          hbox({text("●") | color(spectrumStatusColor) | bold, text(" " + spectrumStatusText) | bold}) | center,
+                                                          text(spectrumMetaText) | center | dim,
+                                                          separator(),
+                                                          createSpectrumBars(spectrumSamples, 12) | flex,
+                                                          separator(),
+                                                          hbox(std::move(tickLabels)) | dim,
+                                                          separator(),
+                                                          text(spectrumInfo.str()) | center | dim,
+                                                      }) |
+                                                      border | flex;
+
+                                std::stringstream linkSummary;
+                                linkSummary << "RSSI " << telemetry.rssi1 << " dBm | LQ " << telemetry.linkQuality << "% | SNR " << telemetry.snr << " dB";
+                                ftxui::Color linkColor = ftxui::Color::Yellow;
+                                if (telemetry.linkQuality >= 80)
+                                {
+                                    linkColor = ftxui::Color::Green;
+                                }
+                                else if (telemetry.linkQuality <= 40)
+                                {
+                                    linkColor = ftxui::Color::Red;
+                                }
+
+                                auto linkPanel = vbox({
+                                                         text("Current Link Status") | center | bold | color(ftxui::Color::Magenta),
+                                                         separator(),
+                                                         vbox({
+                                                             text("RSSI Trend") | bold,
+                                                             createSparkline(rssiHistory) | flex,
+                                                             separator(),
+                                                             text("Link Quality Trend") | bold,
+                                                             createSparkline(linkHistory) | flex,
+                                                             separator(),
+                                                             text("TX Power Trend") | bold,
+                                                             createSparkline(powerHistory) | flex,
+                                                         }) |
+                                                             flex,
+                                                         separator(),
+                                                         text(linkSummary.str()) | center | color(linkColor) | bold,
+                                                     }) |
+                                                     border | flex;
 
                                 return vbox({
                                            createHeader(),
                                            separator(),
-                                           text("Real-Time Signal Analytics") | center | bold,
+                                           text("Frequency vs Link Analytics") | center | bold,
                                            separator(),
-                                           graphsRow,
+                                           spectrumPanel,
+                                           separator(),
+                                           linkPanel,
                                            separator(),
                                            createFooter(),
                                        }) |
@@ -626,39 +753,93 @@ namespace ELRS
         Component FTXUIManager::createRxTestScreen()
         {
             auto runButton = Button("Run Diagnostics", [this]
-                                    { runRxDiagnostics(); });
-
-            auto renderer = Renderer(runButton, [this, runButton]
                                      {
-                                                  Elements resultElements;
-                                                  for (const auto &result : rxTestResults_)
-                                                  {
-                                                      auto line = hbox({
-                                                          text(result.passed ? "✓ " : "✗ ") | color(result.passed ? ftxui::Color::Green : ftxui::Color::Red),
-                                                          text(result.name + ": " + result.detail),
-                                                      });
-                                                      resultElements.push_back(line);
-                                                  }
+                                         if (!rxTestInProgress_)
+                                         {
+                                             runRxDiagnostics();
+                                         }
+                                     });
 
-                                                  if (resultElements.empty())
-                                                  {
-                                                      resultElements.push_back(text("No diagnostics run yet.") | dim);
-                                                  }
+            auto bindButton = Button("Start Binding", [this]
+                                      {
+                                          if (!bindingActive_)
+                                          {
+                                              beginBinding();
+                                          }
+                                      });
 
-                                                  return vbox({
-                                                             createHeader(),
-                                                             separator(),
-                                                             text("Receiver Diagnostics") | center | bold,
-                                                             separator(),
-                                                             runButton->Render() | center,
-                                                             separator(),
-                                                             vbox(resultElements) | border | flex,
-                                                             separator(),
-                                                             text(rxTestStatusMessage_) | center,
-                                                             separator(),
-                                                             createFooter(),
-                                                         }) |
-                                                         border; });
+            auto cancelBindButton = Button("Cancel Binding", [this]
+                                            {
+                                                if (bindingActive_)
+                                                {
+                                                    cancelBinding();
+                                                }
+                                            });
+
+            auto container = Container::Horizontal({runButton, bindButton, cancelBindButton});
+
+            auto renderer = Renderer(container, [this, runButton, bindButton, cancelBindButton]
+                                     {
+                                         updateBindingState();
+
+                                         Elements resultElements;
+                                         for (const auto &result : rxTestResults_)
+                                         {
+                                             auto line = hbox({
+                                                 text(result.passed ? "✓ " : "✗ ") | color(result.passed ? ftxui::Color::Green : ftxui::Color::Red),
+                                                 text(result.name + ": " + result.detail),
+                                             });
+                                             resultElements.push_back(line);
+                                         }
+
+                                         if (resultElements.empty())
+                                         {
+                                             resultElements.push_back(text("No diagnostics run yet.") | dim);
+                                         }
+
+                                         std::string bindingStatus = bindStatusMessage_;
+                                         if (bindingActive_)
+                                         {
+                                             auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - bindStartTime_).count();
+                                             bindingStatus += " (" + std::to_string(elapsed) + "s)";
+                                         }
+
+                                         ftxui::Color bindingColor = bindingActive_ ? ftxui::Color::Yellow : ftxui::Color::Green;
+                                         if (bindingStatus.find("Failed") != std::string::npos || bindingStatus.find("Cannot") != std::string::npos)
+                                         {
+                                             bindingColor = ftxui::Color::Red;
+                                         }
+
+                                         if (!mspCommands_)
+                                         {
+                                             bindingStatus = "MSP command interface unavailable.";
+                                             bindingColor = ftxui::Color::Red;
+                                         }
+
+                                         auto bindingSection = vbox({
+                                                                 text("Binding Controls") | bold | center,
+                                                                 text("Put the receiver in bind mode, then press 'Start Binding'.") | dim | center,
+                                                                 hbox({runButton->Render(), separator(), bindButton->Render(), separator(), cancelBindButton->Render()}) | center,
+                                                                 separatorLight(),
+                                                                 text(bindingStatus) | color(bindingColor) | center,
+                                                             }) |
+                                                             border;
+
+                                         return vbox({
+                                                    createHeader(),
+                                                    separator(),
+                                                    text("Receiver Diagnostics") | center | bold,
+                                                    separator(),
+                                                    bindingSection,
+                                                    separator(),
+                                                    vbox(resultElements) | border | flex,
+                                                    separator(),
+                                                    text(rxTestStatusMessage_) | center,
+                                                    separator(),
+                                                    createFooter(),
+                                                }) |
+                                                border;
+                                     });
 
             return renderer;
         }
@@ -1006,6 +1187,140 @@ namespace ELRS
             return hbox({text(line)});
         }
 
+        Element FTXUIManager::createSpectrumBars(const std::vector<int> &values, int height) const
+        {
+            if (values.empty())
+            {
+                return text("Spectrum data unavailable") | dim;
+            }
+
+            if (height < 1)
+            {
+                height = 1;
+            }
+
+            size_t step = values.size() > 80 ? 2 : 1;
+            std::vector<int> reduced;
+            reduced.reserve((values.size() + step - 1) / step);
+            for (size_t i = 0; i < values.size(); i += step)
+            {
+                int sum = 0;
+                size_t count = 0;
+                for (size_t j = i; j < values.size() && j < i + step; ++j)
+                {
+                    sum += values[j];
+                    ++count;
+                }
+                reduced.push_back(count > 0 ? sum / static_cast<int>(count) : 0);
+            }
+
+            int maxValue = *std::max_element(reduced.begin(), reduced.end());
+            if (maxValue <= 0)
+            {
+                return text("Spectrum floor only") | dim;
+            }
+
+            double centerIndex = (reduced.size() - 1) * 0.5;
+            Elements rows;
+            rows.reserve(height + 1);
+
+            for (int level = height; level > 0; --level)
+            {
+                double threshold = static_cast<double>(maxValue) * level / height;
+                Elements cells;
+                cells.reserve(reduced.size());
+                for (size_t i = 0; i < reduced.size(); ++i)
+                {
+                    bool active = static_cast<double>(reduced[i]) >= threshold;
+                    if (active)
+                    {
+                        double distance = centerIndex > 0.0 ? std::abs(static_cast<double>(i) - centerIndex) / centerIndex : 0.0;
+                        ftxui::Color barColor = ftxui::Color::Green;
+                        if (distance > 0.55)
+                        {
+                            barColor = ftxui::Color::Red;
+                        }
+                        else if (distance > 0.3)
+                        {
+                            barColor = ftxui::Color::Yellow;
+                        }
+                        if (reduced[i] > maxValue * 0.85)
+                        {
+                            barColor = ftxui::Color::Cyan;
+                        }
+                        cells.push_back(text("█") | color(barColor));
+                    }
+                    else
+                    {
+                        cells.push_back(text(" "));
+                    }
+                }
+                rows.push_back(hbox(std::move(cells)));
+            }
+
+            Elements baselineCells;
+            baselineCells.reserve(reduced.size());
+            for (size_t i = 0; i < reduced.size(); ++i)
+            {
+                baselineCells.push_back(text("▀") | color(ftxui::Color::GrayDark));
+            }
+            rows.push_back(hbox(std::move(baselineCells)));
+
+            return vbox(std::move(rows)) | flex;
+        }
+
+        std::vector<int> FTXUIManager::generateSpectrumSamples(bool *usingRealData) const
+        {
+            auto &radioState = RadioState::getInstance();
+            auto observed = radioState.getSpectrumData();
+            bool fresh = !observed.empty() && radioState.isSpectrumFresh(SPECTRUM_FRESHNESS_WINDOW_MS);
+
+            if (usingRealData)
+            {
+                *usingRealData = fresh;
+            }
+
+            if (fresh)
+            {
+                return observed;
+            }
+
+            constexpr int sampleCount = 96;
+            std::vector<int> samples(sampleCount, 0);
+
+            auto telemetry = radioState.getLiveTelemetry();
+
+            double qualityFactor = telemetry.linkQuality / 100.0;
+            if (qualityFactor < 0.0)
+            {
+                qualityFactor = 0.0;
+            }
+            else if (qualityFactor > 1.0)
+            {
+                qualityFactor = 1.0;
+            }
+
+            double snrFactor = static_cast<double>(telemetry.snr);
+            double centerIndex = (sampleCount - 1) * 0.5;
+            double baseBandwidth = 12.0 + (1.0 - qualityFactor) * 8.0;
+            double peakAmplitude = 35.0 + static_cast<double>(telemetry.txPower) * 0.25;
+
+            for (int i = 0; i < sampleCount; ++i)
+            {
+                double offset = (static_cast<double>(i) - centerIndex) / baseBandwidth;
+                double gaussian = std::exp(-0.5 * offset * offset);
+                double ripple = std::sin(static_cast<double>(i) * 0.35) * 6.0;
+                double breathing = std::sin(static_cast<double>(i) * 0.08 + snrFactor * 0.1) * 4.0;
+                double floorLevel = 12.0 + qualityFactor * 25.0;
+
+                double energy = peakAmplitude * gaussian + ripple + breathing + floorLevel;
+                int sampleValue = static_cast<int>(std::round(energy));
+                samples[i] = sampleValue < 0 ? 0 : sampleValue;
+            }
+
+            return samples;
+        }
+
         std::string FTXUIManager::getConnectionInfo()
         {
             auto &radioState = RadioState::getInstance();
@@ -1133,16 +1448,29 @@ namespace ELRS
                                                            screen_.PostEvent(Event::Custom);
                                                        } });
 
+            telemetryHandler_->setSpectrumCallback([this](const std::vector<int> &)
+                                                   {
+                                                        if (running_)
+                                                        {
+                                                            screen_.PostEvent(Event::Custom);
+                                                        } });
+
             if (!telemetryHandler_->isRunning())
             {
                 telemetryHandler_->start();
             }
 
             telemetryActive_ = telemetryHandler_->isRunning();
+
+            if (telemetryActive_ && spectrumRequestsEnabled_)
+            {
+                startSpectrumRequestThread();
+            }
         }
 
         void FTXUIManager::teardownTelemetry()
         {
+            stopSpectrumRequestThread();
             if (telemetryHandler_ && telemetryHandler_->isRunning())
             {
                 telemetryHandler_->stop();
@@ -1227,7 +1555,7 @@ namespace ELRS
                                                        {
                                                            mspCommands_->sendLinkStatsRequest();
                                                        }
-                                                       std::this_thread::sleep_for(std::chrono::seconds(2));
+                                                       std::this_thread::sleep_for(std::chrono::milliseconds(500));
                                                    } });
         }
 
@@ -1242,6 +1570,48 @@ namespace ELRS
             if (autoLinkStatsThread_.joinable())
             {
                 autoLinkStatsThread_.join();
+            }
+        }
+
+        void FTXUIManager::startSpectrumRequestThread()
+        {
+            if (spectrumRequestRunning_ || !mspCommands_ || !spectrumRequestsEnabled_)
+            {
+                return;
+            }
+
+            spectrumRequestRunning_ = true;
+            spectrumRequestThread_ = std::thread([this]
+                                                 {
+                                                     while (spectrumRequestRunning_)
+                                                     {
+                                                         if (mspCommands_)
+                                                         {
+                                                             mspCommands_->sendLinkStatsRequest(true);
+                                                         }
+
+                                                         auto remaining = spectrumRequestInterval_;
+                                                         constexpr auto kSlice = std::chrono::milliseconds(50);
+                                                         while (spectrumRequestRunning_ && remaining.count() > 0)
+                                                         {
+                                                             auto segment = remaining < kSlice ? remaining : kSlice;
+                                                             std::this_thread::sleep_for(segment);
+                                                             remaining -= segment;
+                                                         }
+                                                     } });
+        }
+
+        void FTXUIManager::stopSpectrumRequestThread()
+        {
+            if (!spectrumRequestRunning_)
+            {
+                return;
+            }
+
+            spectrumRequestRunning_ = false;
+            if (spectrumRequestThread_.joinable())
+            {
+                spectrumRequestThread_.join();
             }
         }
 
@@ -1306,6 +1676,7 @@ namespace ELRS
 
             txTestRunning_ = false;
             txTestActiveName_.clear();
+            txTestDurationOverride_.reset();
             if (!txTestStopRequested_)
             {
                 txTestStatusMessage_ = "Test finished: " + testName;
@@ -1315,11 +1686,41 @@ namespace ELRS
 
         void FTXUIManager::txTestContinuousWave()
         {
-            for (int step = 0; step < 5 && !txTestStopRequested_; ++step)
+            using namespace std::chrono;
+
+            auto requestedDuration = txTestDurationOverride_.value_or(milliseconds(3000));
+            if (requestedDuration.count() <= 0)
             {
-                txTestStatusMessage_ = "Continuous wave output... step " + std::to_string(step + 1);
+                requestedDuration = milliseconds(3000);
+            }
+
+            const auto updateInterval = milliseconds(500);
+            const auto startTime = steady_clock::now();
+            const auto endTime = startTime + requestedDuration;
+
+            LOG_INFO("TX_TEST", "Continuous wave test running for " + std::to_string(requestedDuration.count()) + "ms");
+
+            while (!txTestStopRequested_)
+            {
+                const auto now = steady_clock::now();
+                if (now >= endTime)
+                {
+                    break;
+                }
+
+                const auto remaining = duration_cast<milliseconds>(endTime - now);
+                const auto remainingSeconds = std::max<int64_t>(0, duration_cast<seconds>(remaining).count());
+
+                txTestStatusMessage_ = "Continuous wave output... " + std::to_string(remainingSeconds) + "s remaining";
                 screen_.PostEvent(Event::Custom);
-                std::this_thread::sleep_for(std::chrono::milliseconds(600));
+
+                std::this_thread::sleep_for(std::min(updateInterval, remaining));
+            }
+
+            if (!txTestStopRequested_)
+            {
+                txTestStatusMessage_ = "Continuous wave output complete.";
+                screen_.PostEvent(Event::Custom);
             }
         }
 

@@ -15,6 +15,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -46,6 +47,7 @@ namespace ELRS
 
             void setTransmitter(std::shared_ptr<ElrsTransmitter> transmitter);
             void enableAutoLinkStats(bool enable);
+            void scheduleAutomaticPowerTest(std::chrono::milliseconds duration);
 
             // Screen navigation
             void switchToScreen(ScreenType screenType);
@@ -99,6 +101,8 @@ namespace ELRS
             Element createDeviceInfo();
             Element createConnectionStats();
             Element createSparkline(const std::vector<int> &values) const;
+            std::vector<int> generateSpectrumSamples(bool *usingRealData = nullptr) const;
+            Element createSpectrumBars(const std::vector<int> &values, int height = 10) const;
 
             // Data access helpers
             std::string getDeviceStatus();
@@ -145,6 +149,8 @@ namespace ELRS
             void applySettings();
             void startAutoLinkStatsThread();
             void stopAutoLinkStatsThread();
+            void startSpectrumRequestThread();
+            void stopSpectrumRequestThread();
             void startRefreshThread();
             void stopRefreshThread();
 
@@ -162,7 +168,9 @@ namespace ELRS
             bool initialized_;
 
             std::chrono::steady_clock::time_point lastUpdate_;
-            static constexpr int DEFAULT_UPDATE_INTERVAL_MS = 100;
+            static constexpr int DEFAULT_UPDATE_INTERVAL_MS = 500;
+            static constexpr int DEFAULT_SPECTRUM_INTERVAL_MS = 1000;
+            static constexpr int SPECTRUM_FRESHNESS_WINDOW_MS = 1500;
             int updateIntervalMs_;
 
             std::map<ScreenType, std::string> screenTitles_;
@@ -176,6 +184,10 @@ namespace ELRS
             std::atomic<bool> refreshThreadRunning_;
             std::thread autoLinkStatsThread_;
             std::atomic<bool> autoLinkStatsRunning_;
+            std::thread spectrumRequestThread_;
+            std::atomic<bool> spectrumRequestRunning_;
+            bool spectrumRequestsEnabled_;
+            std::chrono::milliseconds spectrumRequestInterval_;
             std::atomic<bool> txTestRunning_;
             std::atomic<bool> txTestStopRequested_;
             std::thread txTestThread_;
@@ -197,6 +209,9 @@ namespace ELRS
             std::string txTestStatusMessage_;
             std::string txTestActiveName_;
             bool transmitterWasRunningBeforeTest_;
+            std::optional<std::chrono::milliseconds> txTestDurationOverride_;
+            std::atomic<bool> autoPowerTestScheduled_;
+            std::chrono::milliseconds autoPowerTestDuration_;
 
             std::vector<RxTestResult> rxTestResults_;
             bool rxTestInProgress_;

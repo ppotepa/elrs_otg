@@ -31,7 +31,7 @@ namespace ELRS
         // ELRS specific commands
         bool sendBindCommand();
         bool sendDeviceDiscovery();
-        bool sendLinkStatsRequest();
+        bool sendLinkStatsRequest(bool includeSpectrum = false);
         bool sendPowerIncrease();
         bool sendPowerDecrease();
         bool sendModelSelect(uint8_t model_id = 1);

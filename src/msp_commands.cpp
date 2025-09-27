@@ -57,22 +57,24 @@ namespace ELRS
         return result;
     }
 
-    bool MspCommands::sendLinkStatsRequest()
+    bool MspCommands::sendLinkStatsRequest(bool includeSpectrum)
     {
         // Request link statistics from TX module
         uint8_t payload[] = {
-            ELRS_DEVICE_TX,  // Device ID (TX module)
-            ELRS_HANDSET_ID, // Handset ID (ELRS Lua)
-            0x00,            // Field ID (0 for link stats)
-            0x00             // Status (0 for request)
+            ELRS_DEVICE_TX,                                     // Device ID (TX module)
+            ELRS_HANDSET_ID,                                    // Handset ID (ELRS Lua)
+            0x00,                                               // Field ID (0 for link stats)
+            static_cast<uint8_t>(includeSpectrum ? 0x01 : 0x00) // Status bit0: request spectrum bins when set
         };
 
-        std::cout << "📊 ELRS_LINKSTATS: Requesting telemetry data..." << std::endl;
+        std::cout << "📊 ELRS_LINKSTATS: Requesting telemetry data"
+                  << (includeSpectrum ? " + spectrum bins" : "") << "..." << std::endl;
         bool result = sendMspCommand(MSP_ELRS_TELEMETRY_PUSH, payload, sizeof(payload));
 
         if (result)
         {
-            std::cout << "✅ LINKSTATS_REQUEST: Telemetry request sent" << std::endl;
+            std::cout << "✅ LINKSTATS_REQUEST: Telemetry request sent"
+                      << (includeSpectrum ? " with spectrum flag" : "") << std::endl;
         }
         else
         {
